@@ -204,8 +204,8 @@ protected:
             p.Update(fDelta, gameHeight);
         ball->Update(fDelta, gameWidth, gameHeight, paddles);
 
-        if (ball->CollideLeftWall(gameWidth, gameHeight)) scores[1]++;
-        else if (ball->CollideRightWall(gameWidth, gameHeight)) scores[0]++;
+        if (ball->CollideLeftWall(gameWidth, gameHeight)) scores[0]++;
+        else if (ball->CollideRightWall(gameWidth, gameHeight)) scores[1]++;
 
         switch (cKey)
         {
