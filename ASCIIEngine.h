@@ -130,8 +130,6 @@ namespace aen {
         }
         
         
-
-
     private:
         void Clip(int& x, int& y){
             if (x < 0) x = 0;

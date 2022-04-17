@@ -242,7 +242,7 @@ int main(){
 
     std::string profileID = "f5f27596-afd0-420a-8aae-8220491dc05b";
     Pong engine;
-    engine.ConstructConsole(400, 100, profileID, 5, "Eu amo a Ana");
+    engine.ConstructConsole(400, 100, profileID, 3, "Eu amo a Ana");
     engine.Run();
 
 }

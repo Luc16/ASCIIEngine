@@ -3,10 +3,13 @@ LDFLAGS = -lm
 
 .PHONY: all clean
 
-all: main
+all: run
 
 main: *.cpp
 	g++ $(CFLAGS) *.cpp -o main $(LDFLAGS)
+
+run: main
+	./main
 
 clean:
 	rm -f main
