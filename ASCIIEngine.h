@@ -42,13 +42,12 @@ enum STYLE {
     UNDERLINE = 5
 };
 
-typedef struct
-{
+struct ScreenChar {
     COLOR fgColor = NONE, bgColor = NONE;
     STYLE style = SNONE;
     char c{};
 
-} ScreenChar;
+};
 
 namespace aen {
     class ASCIIEngine
@@ -68,8 +67,6 @@ namespace aen {
             //Set console size
             std::cout << "\e[8;" << 24 << ";" << 80 << "t";
             system("clear");
-
-            std::cout << "Width: " << m_width << " Height: " << m_height << '\n';
         }
 
         void ConstructConsole(int width, int height, const std::string& appName = "",  int fontSize = 12, const std::string& profileID = {}){
@@ -91,7 +88,7 @@ namespace aen {
                 for (auto& sc: line)
                     sc.c = ' ';
             }
-            SetFontSize(fontSize);
+            if (!profileID.empty()) SetFontSize(fontSize);
             system("clear");
             // Hide cursor
             std::cout << "\e[?25l";
@@ -127,8 +124,8 @@ namespace aen {
         }
         
         void DrawString(int x, int y, std::string s, COLOR fgColor = NONE, COLOR bgColor = NONE){
-            for (long i = 0; i < s.length(); i++){
-                int nx = (int) x + i;
+            for (int i = 0; i < int(s.length()); i++){
+                int nx = x + i;
                 Clip(nx, y);
                 Draw(nx, y, s[i], fgColor, bgColor);
             }
@@ -184,7 +181,7 @@ namespace aen {
             while (m_bAtomRunning && !endProgram){
                 // Handle delta time
                 t2 = std::chrono::system_clock::now();
-                std::chrono::duration<float> elapsedTime = t2 - t1;
+                std::chrono::duration<float, std::chrono::seconds::period> elapsedTime = t2 - t1;
                 t1 = t2;
                 float fDelta = elapsedTime.count();
 
@@ -225,7 +222,7 @@ namespace aen {
         FD_SET(0, &fds);
         char cs[5];
         cs[0] = '\0';
-        int r = 1;
+        size_t r = 1;
 
         if (select(1, &fds, nullptr, nullptr, &tv) > 0)
             r = read(0, &cs, sizeof(cs));
@@ -237,7 +234,7 @@ namespace aen {
     static bool GetScreenSize(unsigned short size[2]) {
         char *array[8];
         char screenSize[64];
-        char* token = nullptr;
+        char* token;
 
         FILE *cmd = popen("xdpyinfo | awk '/dimensions/ {print $2}'", "r");
 
@@ -255,8 +252,8 @@ namespace aen {
             array[i] = token;
             token = strtok(nullptr, "x\n");
         }
-        size[0] = atoi(array[0]);
-        size[1] = atoi(array[1]);
+        size[0] = strtol(array[0], nullptr, 10);
+        size[1] = strtol(array[1], nullptr, 10);
 
         return true;
     }

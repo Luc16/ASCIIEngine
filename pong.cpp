@@ -3,20 +3,18 @@
 #include <string>
 #include <random>
 
-#define PADDLE_SPEED 60
-#define BALL_SPEED 100
-
 class PongPaddle {
 
     float m_x{}, m_y{};
     float m_direction = 1.f;
     std::string m_base;
-    float m_height{}, m_width{};
+    float m_height{}, m_width{}, m_speed{};
     
     public:
     PongPaddle() = default;
 
-    PongPaddle(float x, float y, float width, float height): m_x(x), m_y(y), m_height(height), m_width(width) {
+    PongPaddle(float x, float y, float width, float height, float speed):
+    m_x(x), m_y(y), m_height(height), m_width(width), m_speed(speed) {
         char base[int(width) + 1];
         for (int i = 0; i < int(width); i ++){
             base[i] = ' ';
@@ -30,7 +28,7 @@ class PongPaddle {
     }
     
     void Update(float fDelta, int gameHeight){
-        m_y += PADDLE_SPEED*fDelta*m_direction;
+        m_y += m_speed*fDelta*m_direction;
         if (m_y < 0) {
             m_y = 0;
             ChangeDirection();
@@ -57,13 +55,14 @@ class PongPaddle {
 class Ball {
 
     float m_x{}, m_y{};
-    float m_radius;
-    public:
     float m_dir[2]{};
+    float m_radius, m_speed;
+    float m_initialSpeed, m_maxSpeed, m_acceleration;
 
-    public:
+public:
 
-    Ball(int gameWidth, int gameHeight, float radius): m_radius(radius) {
+    Ball(int gameWidth, int gameHeight, float radius, float initialSpeed, float maxSpeed, float accelerationTime):
+    m_radius(radius), m_speed(initialSpeed), m_initialSpeed(initialSpeed), m_maxSpeed(maxSpeed), m_acceleration((maxSpeed - initialSpeed) / accelerationTime) {
         ResetBall(gameWidth, gameHeight);
     }
 
@@ -76,12 +75,13 @@ class Ball {
     }
 
     void ResetBall(int gameWidth, int gameHeight){
+        m_speed = m_initialSpeed;
         m_x = float(gameWidth)/2;
         m_y = float(gameHeight)/2;
 
-        std::random_device rd; // obtain a random number from hardware
-        std::mt19937 gen(rd()); // seed the generator
-        std::uniform_real_distribution<> distr(-0.7, 0.7);
+        static std::random_device rd; // obtain a random number from hardware
+        static std::mt19937 gen(rd()); // seed the generator
+        static std::uniform_real_distribution<> distr(-0.7, 0.7);
         m_dir[1] = (float) distr(gen);
         m_dir[0] = distr(gen) < 0 ? -std::sqrt(1-m_dir[1]*m_dir[1]): std::sqrt(1-m_dir[1]*m_dir[1]);
     }
@@ -127,12 +127,13 @@ class Ball {
         }
     }
 
-    void Update(float fDelta, int gameWidth, int gameHeight, PongPaddle paddles[2]){
-        m_x += BALL_SPEED*fDelta*m_dir[0];
+    void Update(float fDelta, int gameHeight, PongPaddle paddles[2]) {
+        m_speed = std::min(m_maxSpeed, m_speed + fDelta*m_acceleration);
+        m_x += m_speed*fDelta*m_dir[0];
         CollidePaddleLeft(paddles[0], true);
         CollidePaddleRight(paddles[1], true);
 
-        m_y += BALL_SPEED*fDelta*m_dir[1];
+        m_y += m_speed*fDelta*m_dir[1];
         CollidePaddleLeft(paddles[0], false);
         CollidePaddleRight(paddles[1], false);
 
@@ -151,6 +152,8 @@ class Pong: public aen::ASCIIEngine {
     PongPaddle paddles[2] = {PongPaddle(), PongPaddle()};
     int scores[2] = {0, 0}, gameWidth{}, gameHeight{};
     std::unique_ptr<Ball> ball;
+    bool scoreChanged = false;
+    float time{}, ballAccelerationTime = 15.f;
 
 protected:
     void DrawPaddle(const PongPaddle& paddle){
@@ -188,28 +191,48 @@ protected:
     }
 
     bool OnCreate() override{
-        paddles[0] = PongPaddle(10, 10, 4, 30);
-        paddles[1] = PongPaddle(float(getGameWidth()) - 10 - 4, 10, 4, 30);
-        ball = std::make_unique<Ball>(Ball(getGameWidth()/2, getGameHeight()/2, 3));
+        auto fWidth = float(getGameWidth());
+        auto fHeight = float(getGameHeight());
+        float paddleHeight = std::max(fHeight/3, 1.f);
+        float paddleWidth = std::max(fWidth/100, 1.f);
+        float paddleX = fWidth/40;
+        float paddleY = fHeight/10;
+        float paddleSpeed = 60*fHeight/100;
+        paddles[0] = PongPaddle(paddleX, paddleY, paddleWidth, paddleHeight, paddleSpeed);
+        paddles[1] = PongPaddle(fWidth - paddleX, paddleY, paddleWidth, paddleHeight, paddleSpeed);
+        ball = std::make_unique<Ball>(getGameWidth()/2, getGameHeight()/2,
+                                      std::max(fWidth/100, 1.f), fWidth/3.5f,
+                                      fWidth/2, ballAccelerationTime);
         gameWidth = getGameWidth();
         gameHeight = getGameHeight();
-    
+        setAppName("Direita: " + std::to_string(scores[0]) + "   Esquerda: " + std::to_string(scores[1]));
+
         return true;
     }
 
 
     bool GameLoop(float fDelta, char cKey) override{
+        time += fDelta;
 
         FillScreen();
 
-        setAppName("Direita: " + std::to_string(scores[0]) + "   Esquerda: " + std::to_string(scores[1]));
+        if (scoreChanged) {
+            setAppName("Direita: " + std::to_string(scores[0]) + "   Esquerda: " + std::to_string(scores[1]));
+            scoreChanged = false;
+        }
 
         for (auto& p: paddles)
             p.Update(fDelta, gameHeight);
-        ball->Update(fDelta, gameWidth, gameHeight, paddles);
+        ball->Update(fDelta, gameHeight, paddles);
 
-        if (ball->CollideLeftWall(gameWidth, gameHeight)) scores[0]++;
-        else if (ball->CollideRightWall(gameWidth, gameHeight)) scores[1]++;
+        if (ball->CollideLeftWall(gameWidth, gameHeight)) {
+            scores[0]++;
+            scoreChanged = true;
+        }
+        else if (ball->CollideRightWall(gameWidth, gameHeight)) {
+            scores[1]++;
+            scoreChanged = true;
+        }
 
         switch (cKey)
         {
@@ -245,9 +268,9 @@ void easyPrint(const std::string& string, bool endLine = true){
 
 
 int main(){
-    std::string profileID = "f5f27596-afd0-420a-8aae-8220491dc05b";
+//    std::string profileID = "f5f27596-afd0-420a-8aae-8220491dc05b";
     Pong engine;
-    engine.ConstructConsole(160, 45, "Eu amo a Ana");
+    engine.ConstructConsole(600, 150, "");
     engine.Run();
 }
 
