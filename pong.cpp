@@ -1,5 +1,4 @@
 #include "ASCIIEngine.h"
-#include <fstream>
 #include <string>
 #include <random>
 
@@ -259,13 +258,6 @@ protected:
     }
     
 };
-
-
-void easyPrint(const std::string& string, bool endLine = true){
-    std::cout << string;
-    if (endLine) std::cout << std::endl;
-}
-
 
 int main(){
 //    std::string profileID = "f5f27596-afd0-420a-8aae-8220491dc05b";
