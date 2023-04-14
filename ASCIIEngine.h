@@ -1,14 +1,17 @@
+#include <utility>
 #include <vector>
 #include <thread>
 #include <atomic>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
 #include <iostream>
 #include <unistd.h>
 #include <sys/select.h>
 #include <termios.h>
+#include <cstring>
+#include <csignal>
 
 static struct termios ORIGINAL_TERMIOS;
+sig_atomic_t endProgram = 0;
 
 enum COLOR {
     NONE = 0,
@@ -43,7 +46,7 @@ typedef struct
 {
     COLOR fgColor = NONE, bgColor = NONE;
     STYLE style = SNONE;
-    char c;
+    char c{};
 
 } ScreenChar;
 
@@ -53,11 +56,11 @@ namespace aen {
     private:
         std::vector<std::vector<ScreenChar>> m_screenBuffer;
         std::string m_profileID, m_appName;
-        std::atomic<bool> m_bAtomRuning;        
-        int m_width,m_height;         
+        std::atomic<bool> m_bAtomRunning{};
+        int m_width{},m_height{};
     
     public:
-        ASCIIEngine() {};
+        ASCIIEngine() = default;
         ~ASCIIEngine(){
             SetFontSize(12);
             // Show cursor
@@ -65,17 +68,26 @@ namespace aen {
             //Set console size
             std::cout << "\e[8;" << 24 << ";" << 80 << "t";
             system("clear");
+
+            std::cout << "Width: " << m_width << " Height: " << m_height << '\n';
         }
-        
-        void ConstructConsole(int width, int height, std::string profileID, int fontSize = 12, std::string appName = ""){
+
+        void ConstructConsole(int width, int height, const std::string& appName = "",  int fontSize = 12, const std::string& profileID = {}){
+            signal(SIGINT, [](int signal){ endProgram = 1; });
+            unsigned short screenSize[2];
             m_width = width;
             m_height = height;
+            if (GetScreenSize(screenSize)) {
+                if (fontSize*width > screenSize[0]) m_width = screenSize[0]/(fontSize);
+                if (2*fontSize*height > screenSize[1]) m_height = screenSize[1]/(2*fontSize);
+            }
+            
             m_profileID = profileID;
             m_appName = appName;
 
-            m_screenBuffer.resize(height);
-            for (auto& line: m_screenBuffer){
-                line.resize(width);
+            m_screenBuffer.resize(m_height);
+            for (auto& line: m_screenBuffer){ 
+                line.resize(m_width);
                 for (auto& sc: line)
                     sc.c = ' ';
             }
@@ -87,7 +99,7 @@ namespace aen {
             std::cout << "\e[8;" << m_height + 1 << ";" << m_width << "t";
         }
 
-        virtual void Draw(int x, int y, char c = '.', COLOR fgColor = NONE, COLOR bgColor = NONE, STYLE style = SNONE){
+        void Draw(int x, int y, char c = '.', COLOR fgColor = NONE, COLOR bgColor = NONE, STYLE style = SNONE){
             if (x >= 0 && x < m_width && y >= 0 && y < m_height){
                 m_screenBuffer[y][x].c = c;
                 m_screenBuffer[y][x].fgColor = fgColor;
@@ -115,15 +127,15 @@ namespace aen {
         }
         
         void DrawString(int x, int y, std::string s, COLOR fgColor = NONE, COLOR bgColor = NONE){
-            for (std::string::size_type i = 0; i < s.length(); i++){
-                int nx = x + i;
+            for (long i = 0; i < s.length(); i++){
+                int nx = (int) x + i;
                 Clip(nx, y);
                 Draw(nx, y, s[i], fgColor, bgColor);
             }
         }
 
         void Run(){
-            m_bAtomRuning = true;
+            m_bAtomRunning = true;
             std::thread t(&ASCIIEngine::GameThread, this);
 
             t.join();
@@ -131,14 +143,14 @@ namespace aen {
         
         
     private:
-        void Clip(int& x, int& y){
+        void Clip(int& x, int& y) const{
             if (x < 0) x = 0;
             if (x >= m_width) x = m_width;
             if (y < 0) y = 0;
             if (y >= m_height) y = m_height;
         }
         
-        void MoveCursor(int row, int col){
+        static void MoveCursor(int row, int col){
             std::cout << "\033[" << row << ";" << col << "H";
         }
 
@@ -164,12 +176,12 @@ namespace aen {
 
         
         void GameThread(){
-            if (!OnCreate()) m_bAtomRuning = false;
+            if (!OnCreate()) m_bAtomRunning = false;
 
             auto t1 = std::chrono::system_clock::now();
             auto t2 = std::chrono::system_clock::now();
 
-            while (m_bAtomRuning){
+            while (m_bAtomRunning && !endProgram){
                 // Handle delta time
                 t2 = std::chrono::system_clock::now();
                 std::chrono::duration<float> elapsedTime = t2 - t1;
@@ -179,12 +191,12 @@ namespace aen {
                 char cKey = GetKey();
                 if (cKey != '\0') system("clear");
 
-                if (!GameLoop(fDelta, cKey)) m_bAtomRuning = false;
+                if (!GameLoop(fDelta, cKey)) m_bAtomRunning = false;
 
                 std::cout << "\033]0;ASCII Engine - " << m_appName << " - FPS: "<< 1.0f/fDelta <<"\007" << std::flush;
                 DrawScreen();
             }
-            
+
             OnDestroy();
         }
 
@@ -194,8 +206,8 @@ namespace aen {
 
     }
 
-    void TerminalSetRaw(){
-        struct termios newTermios;
+    static void TerminalSetRaw(){
+        struct termios newTermios{};
 
         tcgetattr(0, &ORIGINAL_TERMIOS);
         memcpy(&newTermios, &ORIGINAL_TERMIOS, sizeof(newTermios));
@@ -205,7 +217,7 @@ namespace aen {
         tcsetattr(0, TCSANOW, &newTermios);
     }
 
-    char GetKey(){
+    static char GetKey(){
         TerminalSetRaw();
         struct timeval tv = { 0L, 0L };
         fd_set fds;
@@ -215,11 +227,38 @@ namespace aen {
         cs[0] = '\0';
         int r = 1;
 
-        if (select(1, &fds, NULL, NULL, &tv) > 0)
+        if (select(1, &fds, nullptr, nullptr, &tv) > 0)
             r = read(0, &cs, sizeof(cs));
 
         TerminalReset();
         return cs[r - 1];
+    }
+
+    static bool GetScreenSize(unsigned short size[2]) {
+        char *array[8];
+        char screenSize[64];
+        char* token = nullptr;
+
+        FILE *cmd = popen("xdpyinfo | awk '/dimensions/ {print $2}'", "r");
+
+        if (!cmd)
+            return false;
+
+        while (fgets(screenSize, sizeof(screenSize), cmd) != nullptr);
+        pclose(cmd);
+
+        token = strtok(screenSize, "x\n");
+
+        if (!token)
+            return false;
+        for (unsigned short i = 0; token != nullptr; ++i) {
+            array[i] = token;
+            token = strtok(nullptr, "x\n");
+        }
+        size[0] = atoi(array[0]);
+        size[1] = atoi(array[1]);
+
+        return true;
     }
 
     public:
@@ -227,9 +266,9 @@ namespace aen {
         virtual bool OnCreate() = 0;
         virtual bool OnDestroy() {return true; };
 
-        int getGameWidth(){ return m_width; }
-        int getGameHeight(){ return m_height; }
-        void setAppName(std::string name){ m_appName = name; }
+        [[nodiscard]] int getGameWidth() const{ return m_width; }
+        [[nodiscard]] int getGameHeight() const{ return m_height; }
+        void setAppName(std::string name){ m_appName = std::move(name); }
     };
 
     

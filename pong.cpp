@@ -8,20 +8,20 @@
 
 class PongPaddle {
 
-    float m_x, m_y;
-    int m_direction = 1;
+    float m_x{}, m_y{};
+    float m_direction = 1.f;
     std::string m_base;
-    int m_height, m_width;
+    float m_height{}, m_width{};
     
     public:
-    PongPaddle() {}
+    PongPaddle() = default;
 
-    PongPaddle(int x, int y, int width, int height): m_x(x), m_y(y), m_height(height), m_width(width) {
-        char base[width + 1];
-        for (int i = 0; i < width; i ++){
+    PongPaddle(float x, float y, float width, float height): m_x(x), m_y(y), m_height(height), m_width(width) {
+        char base[int(width) + 1];
+        for (int i = 0; i < int(width); i ++){
             base[i] = ' ';
         }
-        base[width] = '\0';
+        base[int(width)] = '\0';
         m_base = base;
     }
 
@@ -34,17 +34,21 @@ class PongPaddle {
         if (m_y < 0) {
             m_y = 0;
             ChangeDirection();
-        } else if (m_y + m_height > gameHeight){
+        } else if (m_y + m_height > float(gameHeight)){
             m_y = (float) gameHeight - m_height;
             ChangeDirection();
         } 
     }
 
-    int getX(){ return (int) m_x; }
-    int getY(){ return (int) m_y; }
-    int getHeight(){ return m_height; }
-    int getWidth(){ return m_width; }
-    std::string getBase(){ return m_base; }
+    [[nodiscard]] float getX() const { return m_x; }
+    [[nodiscard]] float getY() const { return m_y; }
+    [[nodiscard]] int getIntX() const { return int(m_x); }
+    [[nodiscard]] int getIntY() const { return int(m_y); }
+    [[nodiscard]] float getHeight() const { return m_height; }
+    [[nodiscard]] float getWidth() const { return m_width; }
+    [[nodiscard]] int getIntHeight() const { return int(m_height); }
+    [[nodiscard]] int getIntWidth() const { return int(m_width); }
+    [[nodiscard]] std::string getBase() const { return m_base; }
 
 
 };
@@ -52,10 +56,10 @@ class PongPaddle {
 
 class Ball {
 
-    float m_x, m_y;
-    int m_radius;
+    float m_x{}, m_y{};
+    float m_radius;
     public:
-    float m_dir[2];
+    float m_dir[2]{};
 
     public:
 
@@ -68,18 +72,18 @@ class Ball {
 
     void CollideUpperWalls(int gameHeight){
         if (m_y - m_radius <= 0) {m_y = m_radius; BounceY();} 
-        else if (m_y + m_radius >= gameHeight) {m_y = gameHeight - m_radius; BounceY();}
+        else if (m_y + m_radius >= float(gameHeight)) {m_y = float(gameHeight) - m_radius; BounceY();}
     }
 
     void ResetBall(int gameWidth, int gameHeight){
-        m_x = gameWidth/2;
-        m_y = gameHeight/2;
+        m_x = float(gameWidth)/2;
+        m_y = float(gameHeight)/2;
 
         std::random_device rd; // obtain a random number from hardware
         std::mt19937 gen(rd()); // seed the generator
         std::uniform_real_distribution<> distr(-0.7, 0.7);
         m_dir[1] = (float) distr(gen);
-        m_dir[0] = distr(gen) < 0 ? -sqrt(1-m_dir[1]*m_dir[1]): sqrt(1-m_dir[1]*m_dir[1]);
+        m_dir[0] = distr(gen) < 0 ? -std::sqrt(1-m_dir[1]*m_dir[1]): std::sqrt(1-m_dir[1]*m_dir[1]);
     }
 
     bool CollideLeftWall(int gameWidth, int gameHeight){
@@ -88,11 +92,11 @@ class Ball {
     }
 
     bool CollideRightWall(int gameWidth, int gameHeight){
-        if (m_x + m_radius >= gameWidth) {m_x = gameWidth - m_radius; ResetBall(gameWidth, gameHeight); return true; }
+        if (m_x + m_radius >= float(gameWidth)) {m_x = float(gameWidth) - m_radius; ResetBall(gameWidth, gameHeight); return true; }
         return false;
     }
 
-    void CollidePaddleRight(PongPaddle paddle, bool xCollision){
+    void CollidePaddleRight(const PongPaddle& paddle, bool xCollision){
         if (m_y - m_radius > paddle.getY() && m_y + m_radius < paddle.getY() + paddle.getHeight() && m_x + m_radius > paddle.getX()){
             if (xCollision) {
                 m_x = paddle.getX() - m_radius;
@@ -108,7 +112,7 @@ class Ball {
         
     }
 
-    void CollidePaddleLeft(PongPaddle paddle, bool xCollision){
+    void CollidePaddleLeft(const PongPaddle& paddle, bool xCollision){
         if (m_y - m_radius > paddle.getY() && m_y + m_radius < paddle.getY() + paddle.getHeight() && m_x - m_radius < paddle.getX() + paddle.getWidth()){
             if (xCollision) {
                 m_x = paddle.getX() + paddle.getWidth() + m_radius;
@@ -136,26 +140,26 @@ class Ball {
     }
 
 
-    int getX(){ return (int) m_x; }
-    int getY(){ return (int) m_y; }
-    int getRadius(){ return m_radius; }
+    [[nodiscard]] int getX() const { return int(m_x); }
+    [[nodiscard]] int getY() const { return int(m_y); }
+    [[nodiscard]] int getRadius() const { return int(m_radius); }
 };
 
 
 class Pong: public aen::ASCIIEngine {
 
     PongPaddle paddles[2] = {PongPaddle(), PongPaddle()};
-    int scores[2] = {0, 0}, gameWidth, gameHeight;
+    int scores[2] = {0, 0}, gameWidth{}, gameHeight{};
     std::unique_ptr<Ball> ball;
 
 protected:
-    void DrawPaddle(PongPaddle paddle){
-        for (int i = 0; i < paddle.getHeight(); i++)
-            DrawString(paddle.getX(), paddle.getY() + i, paddle.getBase(), NONE, BG_RED);
+    void DrawPaddle(const PongPaddle& paddle){
+        for (int i = 0; i < paddle.getIntHeight(); i++)
+            DrawString(paddle.getIntX(), paddle.getIntY() + i, paddle.getBase(), NONE, BG_RED);
     }
 
-    void DrawBall(Ball ball){
-        int yc = ball.getY(), xc = ball.getX(), r = ball.getRadius();
+    void DrawBall(){
+        int yc = ball->getY(), xc = ball->getX(), r = ball->getRadius();
         int x = 0;
 		int y = r;
 		int e = 3 - 2 * r;
@@ -183,9 +187,9 @@ protected:
         }
     }
 
-    virtual bool OnCreate(){
+    bool OnCreate() override{
         paddles[0] = PongPaddle(10, 10, 4, 30);
-        paddles[1] = PongPaddle(getGameWidth() - 10 - 4, 10, 4, 30);
+        paddles[1] = PongPaddle(float(getGameWidth()) - 10 - 4, 10, 4, 30);
         ball = std::make_unique<Ball>(Ball(getGameWidth()/2, getGameHeight()/2, 3));
         gameWidth = getGameWidth();
         gameHeight = getGameHeight();
@@ -194,7 +198,7 @@ protected:
     }
 
 
-    virtual bool GameLoop(float fDelta, char cKey){
+    bool GameLoop(float fDelta, char cKey) override{
 
         FillScreen();
 
@@ -217,6 +221,7 @@ protected:
             break;
         case 'q':
             return false;
+        default:
             break;
         }
 
@@ -225,7 +230,7 @@ protected:
 
         DrawLine();
         
-        DrawBall(*ball);
+        DrawBall();
 
         return true;
     }
@@ -233,18 +238,17 @@ protected:
 };
 
 
-void easyPrint(std::string string, bool endLine = true){
+void easyPrint(const std::string& string, bool endLine = true){
     std::cout << string;
     if (endLine) std::cout << std::endl;
 }
 
-int main(){
 
+int main(){
     std::string profileID = "f5f27596-afd0-420a-8aae-8220491dc05b";
     Pong engine;
-    engine.ConstructConsole(400, 100, profileID, 3, "Eu amo a Ana");
+    engine.ConstructConsole(160, 45, "Eu amo a Ana");
     engine.Run();
-
 }
 
 
