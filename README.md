@@ -9,7 +9,9 @@ inputs can be used interactively by using the terminal in raw mode.
 A simple pong game was implemented using this engine.
 (use `a` and `l` to switch the left and right paddles direction, respectively)
 
-![](pong.gif)
+<p align="center">
+<img src="pong.gif">
+</p>
 
 
 ## Other projects
